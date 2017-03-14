@@ -1,52 +1,27 @@
 
-from weakref import WeakKeyDictionary
 from uuid import uuid5, NAMESPACE_URL
-from collections import namedtuple
 
-class E(namedtuple("Entity", "URI")):
-    __slots__ = ()
-
-    def __new__(cls, uri):
-        return super(cls, E).__new__(cls, uri, 
-                                     uuid=uuid5(NAMESPACE_URL, self).int)
+class E(str):
+    """Entity"""
+    def __new__(cls, value):
+        return super().__new__(cls, value)
     def __hash__(self):
-        return self.uuid
+        return uuid5(NAMESPACE_URL, self).int
 
-#class E(str):
-#    """Entity"""
-#    def __new__(cls, value):
-#        return super().__new__(cls, value)
-#    def __hash__(self):
-#        return uuid5(NAMESPACE_URL, self).int
+class P(str):
+    """Property"""
+    def __new__(cls, value):
+        return super().__new__(cls, value)    
+    def __hash__(self):
+        return uuid5(NAMESPACE_URL, self).int  
 
-# E and P must be singletons!
-
-class P(namedtuple("Predicate", "name type")):
-    __slots__ = ()
-
-    def __new__(cls, rel, type):
-        return super(cls, P).__new__(cls, rel, type)
-    
 class TripleStore:
-    # _concepts  = set()
     _spo = {}  # {subject: {predicate: set([object])}}
     _pos = {}  # {predicate: {object: set([subject])}}
     _osp = {}  # {subject: {subject, set([predicate])}}
     
     def __setitem__(self, key, value):
-        def add2index(s, p, o):
-            if not isinstance(s, E):
-                raise RuntimeWarning("subject must be an E()")
-            if not isinstance(p, P):
-                raise RuntimeWarning("predicate must be a P()")
-            if not isinstance(o, p.type):
-                raise RuntimeWarning("object must be of predicate.type")
-                        
-            really_add2index(self._spo, s, p, o)
-            really_add2index(self._pos, p, o, s)
-            really_add2index(self._osp, o, s, p)
-            
-        def really_add2index(index, a, b, c):
+        def add2index(index, a, b, c):
             if a not in index:
                 index[a] = {b: set([c])}
             else:
@@ -55,15 +30,21 @@ class TripleStore:
                 else:
                     index[a][b].add(c)
         
-        if isinstance(value, tuple):
-            # only one factoid
-            p, o = value
-            add2index(key, p, o)
-            
-        elif isinstance(value, dict):
-            # a couple factoids
-            for p, o in value.items():
-                add2index(key, p, o)
+        if not isinstance(key, slice):
+            raise RuntimeWarning("must be store[s:p] = o")
+        elif key.step is not None:
+            raise RuntimeWarning("slice must be two-part, not three")
+        else:
+            s = key.start
+            if not isinstance(s, E):
+                raise RuntimeWarning("subject must be an E()")
+            p = key.stop
+            if not isinstance(p, P):
+                raise RuntimeWarning("predicate must be a P()")
+            o = value
+            add2index(self._spo, s, p, o)
+            add2index(self._pos, p, o, s)
+            add2index(self._osp, o, s, p)
                       
     def __getitem__(self, key):
         if not isinstance(key, slice):
@@ -72,7 +53,7 @@ class TripleStore:
         else: 
             s, p, o = key.start, key.stop, key.step
             
-        case = {(True, True, True): lambda: ((s, p, o) for x in (1,) 
+        d2 = {(True, True, True): lambda: ((s, p, o) for x in (1,) 
                                            if o in self._spo[s][p]),
               (True, True, False): lambda: ((s, p, OBJ) for OBJ in self._spo[s][p]),
               (True, False, True): lambda: ((s, PRED, o) for PRED in self._osp[o][s]),
@@ -93,11 +74,11 @@ class TripleStore:
              }
         # .get with default won't work here because any of the dicts may throw KeyError
         try:
-            return case[(s is not None,  p is not None, o is not None)]()
+            return d2[(s is not None,  p is not None, o is not None)]()
         except KeyError:
             return ()
         
-    def query(self, clauses):
+    def query(self,clauses):
         bindings = None
         for clause in clauses:
             bpos = {}
@@ -112,7 +93,7 @@ class TripleStore:
             if bindings == None:
                 # This is the first pass, everything matches
                 bindings = []
-                for row in rows:
+                for row in rows:   
                     binding = {}
                     for var, pos in bpos.items():
                         binding[var] = row[pos]
@@ -131,5 +112,5 @@ class TripleStore:
                             else:
                                 tempbinding[var] = row[pos]
                         if validmatch: newb.append(tempbinding)
-                bindings = newb
+                bindings = newb    
         return bindings
