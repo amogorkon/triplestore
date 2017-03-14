@@ -12,19 +12,21 @@ class E(namedtuple("Entity", "URI")):
     def __hash__(self):
         return self.uuid
 
-'class E(str):
-    """Entity"""
-    def __new__(cls, value):
-        return super().__new__(cls, value)
-    def __hash__(self):
-        return uuid5(NAMESPACE_URL, self).int'
+#class E(str):
+#    """Entity"""
+#    def __new__(cls, value):
+#        return super().__new__(cls, value)
+#    def __hash__(self):
+#        return uuid5(NAMESPACE_URL, self).int
+
+# E and P must be singletons!
 
 class P(namedtuple("Predicate", "name type")):
     __slots__ = ()
 
     def __new__(cls, rel, type):
         return super(cls, P).__new__(cls, rel, type)
-
+    
 class TripleStore:
     # _concepts  = set()
     _spo = {}  # {subject: {predicate: set([object])}}
@@ -37,7 +39,7 @@ class TripleStore:
                 raise RuntimeWarning("subject must be an E()")
             if not isinstance(p, P):
                 raise RuntimeWarning("predicate must be a P()")
-            if not (isinstance(o, p.type):
+            if not isinstance(o, p.type):
                 raise RuntimeWarning("object must be of predicate.type")
                         
             really_add2index(self._spo, s, p, o)

@@ -1,2 +1,5 @@
 DEV\ *
 .ipynb_checkpoints/
+.cache
+__pycache__
+store/__pycache__
