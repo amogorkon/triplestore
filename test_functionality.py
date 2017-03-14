@@ -9,5 +9,5 @@ def store():
     return TripleStore()
 
 def test_store(store):
-    store[E("spam")] = P("ham"), E("eggs")
-    assert list(store[E("spam")::]) == [(E("spam"),P("ham"), E("eggs"))]
+    store[E("anselm"):P("name")] = "Anselm Kiefner"
+    assert list(store[::]) == [('anselm', 'name', 'Anselm Kiefner')]
