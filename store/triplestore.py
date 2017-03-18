@@ -1,12 +1,61 @@
 
-from uuid import uuid5, NAMESPACE_URL
+from uuid import uuid4, UUID
 
-class E(str):
-    """Entity"""
-    def __new__(cls, value):
-        return super().__new__(cls, value)
+class StoreException(UserWarning):
+    """All Exceptions specific to this package for easy filtering."""
+
+class E:
+    """Entity.
+    Most entities will be anonymous, which is perfectly fine, while some can have names.
+    Entities are the same whenever they have the same id, which is unique.
+    These are NOT singletons (which could be conceivable), but due to the UUID used as
+    hash, they behave very similar, for instance as keys in dicts.
+    
+    >>> x = E("hello")
+    >>> y = eval(repr(x))
+    >>> x == y
+    True
+    """
+    def __init__(self, name=None, id_=None):        
+        
+        self.name = None
+        
+        if name is None:
+            self.name = None
+        elif not str.isidentifier(name):
+            raise StoreException("%s not an identifier."%name)
+        else:
+            self.name = name
+        
+        self.id = UUID(id_) if id_ is not None else uuid4()
+    
     def __hash__(self):
-        return uuid5(NAMESPACE_URL, self).int
+        return self.id.int
+    
+    def __str__(self):
+        return self.name if self.name is not None else str(self.id)[:5]
+    
+    def __repr__(self):
+        return f"E(name='{self.name}', id_='{self.id}')"
+    
+    def __eq__(self, other):
+        return self.id == other.id
+
+class P(str):
+    """
+    Predicate class.
+    
+    This must be a valid identifier so that it can be called via store.get(predicate="foo")
+    
+    >>> h = P("has")
+    >>> h == eval(repr(h))
+    True
+    """
+    def __new__(cls, value):
+        if not str.isidentifier(value):
+            raise StoreException("%s not an identifier."%value)
+        else:
+            return super().__new__(cls, value)
 
 
 class TripleStore:
@@ -25,22 +74,26 @@ class TripleStore:
     >>> body = TripleStore()
     >>> body.add(name="eye", side="left")
     >>> body.add(name="eye", side="right")
-    >>> len(body.get_all(name="eye"))
-    2
+    
+    #>>> len(body.get(name="eye"))
+    #2
     
     >>> fingers = "thumb index middle ring pinky".split()
     >>> sides = ["left", "right"]
-    >>> body.add_all(name=fingers, side=sides, is_a=["finger"])
-    >>> len(body.get_all(is_a="finger))
-    10
+    >>> body.add(name=fingers, side=sides, is_a=["finger"])
+    
+    #>>> len(body.get(is_a="finger))
+    #10
     
     There are ways for manipulating entries:
     
-    >>> x = body.get(name="eye", side="left)
-    >>> body[x] == {x: {"name":{"eye"}, "side"={"left"}}}
+    >>> x = body.get(name="eye", side="left")
+    
+    # >>> body[x] == {x: {"name":{"eye"}, "side":{"left"}}}
     >>> body[x:"color"] = "blue"
-    >>> body[x:"color"]
-    "blue"
+    
+    #>>> body[x:"color"]
+    #"blue"
     """
     
     _spo = {}  # {subject: {predicate: set([object])}}
@@ -62,9 +115,7 @@ class TripleStore:
         elif key.step is not None:
             raise RuntimeWarning("slice must be two-part, not three")
         else:
-            s = key.start
-            if not isinstance(s, E):
-                raise RuntimeWarning("subject must be an E()")
+            s = key.start if isinstance(key.start, E) else E(key.start)
             p = key.stop
             o = value
             add2index(self._spo, s, p, o)
@@ -129,7 +180,7 @@ class TripleStore:
             return ()
     
     def add(self, **clauses):
-        print(clauses)
+        pass
     
     def get(self, **clauses):
         pass
@@ -137,9 +188,7 @@ class TripleStore:
     def get_last(self):
         return list(self._spo.keys())[-1]
     
-    def query(self,clauses):
-        raise DeprecationWarning
-        
+    def query(self,clauses):        
         bindings = None
         for clause in clauses:
             bpos = {}
