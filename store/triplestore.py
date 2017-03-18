@@ -8,14 +8,41 @@ class E(str):
     def __hash__(self):
         return uuid5(NAMESPACE_URL, self).int
 
-class P(str):
-    """Property"""
-    def __new__(cls, value):
-        return super().__new__(cls, value)    
-    def __hash__(self):
-        return uuid5(NAMESPACE_URL, self).int  
 
 class TripleStore:
+    """A set of three dicts that work together as one.
+    
+    Keep in mind that the primary dict - spo - is a Python3 dict,
+    which works as an OrderedDict that remembers insertion order.
+    It might be a good idea to have the other two dicts as weakrefs,
+    but that still needs to be figured out.
+    
+    Subjects need to be unique Entities because
+    head = {"eye": {"side": {"left}}, "eye": {"side": "right"}}
+    naturally would only count 1 eye instead of two different ones.
+    So, this must work:
+    
+    >>> body = TripleStore()
+    >>> body.add(name="eye", side="left")
+    >>> body.add(name="eye", side="right")
+    >>> len(body.get_all(name="eye"))
+    2
+    
+    >>> fingers = "thumb index middle ring pinky".split()
+    >>> sides = ["left", "right"]
+    >>> body.add_all(name=fingers, side=sides, is_a="finger")
+    >>> len(body.get_all(is_a="finger))
+    10
+    
+    There are ways for manipulating entries:
+    
+    >>> x = body.get(name="eye", side="left)
+    >>> body[x] == {x: {"name":{"eye"}, "side"={"left"}}}
+    >>> body[x:"color"] = "blue"
+    >>> body[x:"color"]
+    "blue"
+    """
+    
     _spo = {}  # {subject: {predicate: set([object])}}
     _pos = {}  # {predicate: {object: set([subject])}}
     _osp = {}  # {subject: {subject, set([predicate])}}
