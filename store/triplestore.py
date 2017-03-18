@@ -30,7 +30,7 @@ class TripleStore:
     
     >>> fingers = "thumb index middle ring pinky".split()
     >>> sides = ["left", "right"]
-    >>> body.add_all(name=fingers, side=sides, is_a="finger")
+    >>> body.add_all(name=fingers, side=sides, is_a=["finger"])
     >>> len(body.get_all(is_a="finger))
     10
     
@@ -66,28 +66,50 @@ class TripleStore:
             if not isinstance(s, E):
                 raise RuntimeWarning("subject must be an E()")
             p = key.stop
-            if not isinstance(p, P):
-                raise RuntimeWarning("predicate must be a P()")
             o = value
             add2index(self._spo, s, p, o)
             add2index(self._pos, p, o, s)
             add2index(self._osp, o, s, p)
                       
     def __getitem__(self, key):
+        """
+        Return iterator over triplets directly as result.
+        
+        This is a mechanism inspired by the brilliant way numpy handles
+        arrays and its vectorization methods.
+        This is different from the SQL inspired brilliant way of how 
+        django handles queries, which is reflected by the .get() method,
+        which returns a Query object that lazily evaluates and caches.
+        
+        The case dictionary here is an invention of mine after 
+        researching alternatives for page-long if-clauses that 
+        are detrimental to readability.
+        It works like this: 
+        1) extract s, p and o from the given store[s:p:o] call
+        2) go to the bottom of the function and check which parts are given
+        3) pass the resulting tuple into the case dict as key and execute the stored func
+        4) since the anonymous funcs are closures with access to the local variables,
+           they can access all the stuff inside the function and return generators as result
+        
+        """
         if not isinstance(key, slice):
             s = key
             p,o = None, None
         else: 
             s, p, o = key.start, key.stop, key.step
             
-        d2 = {(True, True, True): lambda: ((s, p, o) for x in (1,) 
-                                           if o in self._spo[s][p]),
-              (True, True, False): lambda: ((s, p, OBJ) for OBJ in self._spo[s][p]),
-              (True, False, True): lambda: ((s, PRED, o) for PRED in self._osp[o][s]),
+        case = {(True, True, True): lambda: ((s, p, o) 
+                                             for x in (1,) 
+                                             if o in self._spo[s][p]),
+              (True, True, False): lambda: ((s, p, OBJ) 
+                                            for OBJ in self._spo[s][p]),
+              (True, False, True): lambda: ((s, PRED, o) 
+                                            for PRED in self._osp[o][s]),
               (True, False, False): lambda: ((s, PRED, OBJ) 
                                              for PRED, objset in self._spo[s].items()
                                              for OBJ in objset),
-              (False, True, True): lambda: ((SUB, p, o) for SUB in self._pos[p][o]),
+              (False, True, True): lambda: ((SUB, p, o) 
+                                            for SUB in self._pos[p][o]),
               (False, True, False): lambda: ((SUB, p, OBJ) 
                                              for OBJ, subset in self._pos[p].items() 
                                              for SUB in subset),
@@ -99,13 +121,25 @@ class TripleStore:
                                              for PRED, objset in predset.items()
                                              for OBJ in objset)
              }
-        # .get with default won't work here because any of the dicts may throw KeyError
+        # .get with default won't work here because any of the 
+        # dicts may throw KeyError
         try:
-            return d2[(s is not None,  p is not None, o is not None)]()
+            return case[(s is not None,  p is not None, o is not None)]()
         except KeyError:
             return ()
-        
+    
+    def add(self, **clauses):
+        print(clauses)
+    
+    def get(self, **clauses):
+        pass
+    
+    def get_last(self):
+        return list(self._spo.keys())[-1]
+    
     def query(self,clauses):
+        raise DeprecationWarning
+        
         bindings = None
         for clause in clauses:
             bpos = {}
