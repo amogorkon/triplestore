@@ -80,7 +80,7 @@ class TripleStore:
     
     >>> fingers = "thumb index middle ring pinky".split()
     >>> sides = ["left", "right"]
-    >>> body.add(name=fingers, side=sides, is_a=["finger"])
+    >>> body.add_all(name=fingers, side=sides, is_a=["finger"])
     
     #>>> len(body.get(is_a="finger))
     #10
@@ -140,7 +140,7 @@ class TripleStore:
         2) go to the bottom of the function and check which parts are given
         3) pass the resulting tuple into the case dict as key and execute the stored func
         4) since the anonymous funcs are closures with access to the local variables,
-           they can access all the stuff inside the function and return generators as result
+           they easily can build generators with those and return them.
         
         """
         if not isinstance(key, slice):
@@ -179,7 +179,12 @@ class TripleStore:
         except KeyError:
             return ()
     
-    def add(self, **clauses):
+    def add(self, **properties):
+        s = E()
+        for p, o in properties.items():
+            self[s:p] = o
+    
+    def add_all(self, **lists_of_properties):
         pass
     
     def get(self, **clauses):
@@ -224,3 +229,7 @@ class TripleStore:
                         if validmatch: newb.append(tempbinding)
                 bindings = newb    
         return bindings
+    
+
+class Query:
+    """Class representing a query to the store."""
