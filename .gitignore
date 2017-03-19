@@ -3,3 +3,5 @@ DEV\ *
 .cache
 __pycache__
 store/__pycache__
+TODO*
+.hypothesis
