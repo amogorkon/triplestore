@@ -1,5 +1,6 @@
 
 from uuid import uuid4, UUID
+from collections import namedtuple
 
 class StoreException(UserWarning):
     """All Exceptions specific to this package for easy filtering."""
@@ -33,10 +34,14 @@ class E:
         return self.id.int
     
     def __str__(self):
-        return self.name if self.name is not None else str(self.id)[:5]
+        return self.name if self.name is not None else "_" + str(self.id)[:5]
     
     def __repr__(self):
-        return f"E(name='{self.name}', id_='{self.id}')"
+        """Return representation so that e == eval(repr(e))"""
+        return ("E(" 
+                f"""{f"name='{self.name}'," if self.name is not None else ''}"""
+                f"id_='{self.id}')"
+               )
     
     def __eq__(self, other):
         return self.id == other.id
@@ -143,9 +148,11 @@ class TripleStore:
            they easily can build generators with those and return them.
         
         """
+        # we query for an entity directly
         if not isinstance(key, slice):
-            s = key
-            p,o = None, None
+            assert isinstance(key, E)
+            properties = self._spo[key]
+            return namedtuple(f"{str(key)}", properties.keys())(**properties)
         else: 
             s, p, o = key.start, key.stop, key.step
             
@@ -179,15 +186,15 @@ class TripleStore:
         except KeyError:
             return ()
     
-    def add(self, **properties):
-        s = E()
+    def add(self, entity=None, **properties):
+        s = E() if entity is None else entity
         for p, o in properties.items():
             self[s:p] = o
     
     def add_all(self, **lists_of_properties):
         pass
     
-    def get(self, **clauses):
+    def get_all(self, **clauses):
         pass
     
     def get_last(self):
