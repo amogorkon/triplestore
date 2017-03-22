@@ -2,6 +2,7 @@
 from uuid import uuid4, UUID
 from collections import namedtuple
 from enum import Enum
+from itertools import product
 
 class StoreException(UserWarning):
     """All Exceptions specific to this package for easy filtering."""
@@ -71,23 +72,23 @@ class TripleStore:
     So, this must work:
     
     >>> body = TripleStore()
+    >>> P = BasePredicate("P", "name side is_a")
+    >>> body.add({P.name:"eye", P.side:"left"})
+    >>> body.add({P.name:"eye", P.side:"right"})
     
-    # >>> body.add(name="eye", side="left")
-    # >>> body.add(name="eye", side="right")
-    
-    #>>> len(body.get(name="eye"))
-    #2
+    >>> len(list(body[:P.name:"eye"]))
+    2
     
     >>> fingers = "thumb index middle ring pinky".split()
     >>> sides = ["left", "right"]
     
-    # >>> body.add_all(name=fingers, side=sides, is_a=["finger"])
-    #>>> len(body.get(is_a="finger))
-    #10
+    >>> body.add_all({P.name:fingers, P.side:sides, P.is_a:["finger"]})
+    >>> len(list(body[:P.is_a:"finger"]))
+    10
     
     There are ways for manipulating entries:
     
-    # >>> x = body.get(name="eye", side="left")
+    >>> x = body.get({P.name:"eye", P.side:"left"})
     
     # >>> body[x] == {x: {"name":{"eye"}, "side":{"left"}}}
     # >>> body[x:"color"] = "blue"
@@ -198,61 +199,45 @@ class TripleStore:
         except KeyError:
             return ()
     
-    def add(self, entity=None, **properties):
-        s = E() if entity is None else entity
-        for p, o in properties.items():
+    def __len__(self):
+        return len(self._spo)
+    
+    def add(self, d, s=None):
+        """Convenience method to add a new item to the store."""
+        s = s if s is not None else E()
+        for p, o in d.items():
             self[s:p] = o
     
-    def add_all(self, entities=None, **lists_of_properties):
-        assert all(isinstance(x, list) for x in lists_of_properties.values())
+    def add_all(self, d):
+        """Add all combinations of predicate:object to the store.
         
-        for p, o in lists_of_properties.items():
-            pass
-            
+        From a dict of key:[list of values] we produce a list of all combinations
+        of [(key1,value1), (key1,value2)] from which we can build a new dict
+        to pass into self.add as parameters
+        """
+        combos = product(*[[(k, v) for v in d[k]] for k in d.keys()])
+        for c in combos:
+            params = {k:v for k, v in c}
+            self.add(params)
     
-    def get(self, **clauses):
-        pass
+    def get(self, clause_dict):
+        """Get all items from the store that match ALL clauses.
+        
+        The returned set of items can be reused in any way, including combining
+        or excluding items from different queries or manually adding items.
+        It is necessary to use a dict here in order to make use of Enum.
+        """
+        clauses = list(clause_dict.items())
+        # we need to init the results somehow
+        k, v = clauses.pop()
+        result = {s for s, p, o in self[:k:v]}
+        for k, v in clauses:
+            result.intersection_update({s for s, p, o in self[:k:v]})
+        return result
     
     def get_last_added(self):
+        """Get the item that was last added to the store."""
         return list(self._spo.keys())[-1]
-    
-    def query(self,clauses):        
-        bindings = None
-        for clause in clauses:
-            bpos = {}
-            qc = []
-            for pos, x in enumerate(clause):
-                if x.startswith('?'):
-                    qc.append(None)
-                    bpos[x] = pos
-                else:
-                    qc.append(x)
-            rows = list(self.triples((qc[0], qc[1], qc[2])))
-            if bindings == None:
-                # This is the first pass, everything matches
-                bindings = []
-                for row in rows:   
-                    binding = {}
-                    for var, pos in bpos.items():
-                        binding[var] = row[pos]
-                    bindings.append(binding)
-            else:
-                # In subsequent passes, eliminate bindings that don't work
-                newb = []
-                for binding in bindings:
-                    for row in rows:
-                        validmatch = True
-                        tempbinding = binding.copy()
-                        for var, pos in bpos.items():
-                            if var in tempbinding:
-                                if tempbinding[var] != row[pos]:
-                                    validmatch = False
-                            else:
-                                tempbinding[var] = row[pos]
-                        if validmatch: newb.append(tempbinding)
-                bindings = newb    
-        return bindings
-    
 
 class Query:
     """Class representing a query to the store."""
