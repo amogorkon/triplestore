@@ -1,5 +1,5 @@
 
-from pytest import fixture
+from pytest import fixture, raises
 from unittest.mock import Mock
 from unittest import skip
 
@@ -21,3 +21,12 @@ def test_store(store, P):
     e = E()
     store[e:P.name] = "Anselm"
     assert store[e].name == {"Anselm"}
+    
+    class ConflictingPredicate(BasePredicate):
+        name = 2
+    
+    store[e:ConflictingPredicate.name] = "Foobar"
+    with raises(AttributeError):
+        store[e].name, AttributeError
+    assert store[e].Predicate__name == {"Anselm"}
+    assert store[e].ConflictingPredicate__name == {"Foobar"}
