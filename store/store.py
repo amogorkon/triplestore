@@ -1,6 +1,7 @@
 
 from uuid import uuid4, UUID
 from collections import namedtuple
+from enum import Enum
 
 class StoreException(UserWarning):
     """All Exceptions specific to this package for easy filtering."""
@@ -46,22 +47,15 @@ class E:
     def __eq__(self, other):
         return self.id == other.id
 
-class P(str):
-    """
-    Predicate class.
+class BasePredicate(Enum):
+    """Baseclass for Predicates.
     
-    This must be a valid identifier so that it can be called via store.get(predicate="foo")
+    Members must be defined in subclass for specific topics.
+    Members CAN NOT be defined here, since extending enums is not allowed.
+    However, common behaviour CAN be defined here.
+    Use enum.auto() if values don't matter.
     
-    >>> h = P("has")
-    >>> h == eval(repr(h))
-    True
     """
-    def __new__(cls, value):
-        if not str.isidentifier(value):
-            raise StoreException("%s not an identifier."%value)
-        else:
-            return super().__new__(cls, value)
-
 
 class TripleStore:
     """A set of three dicts that work together as one.
@@ -77,33 +71,35 @@ class TripleStore:
     So, this must work:
     
     >>> body = TripleStore()
-    >>> body.add(name="eye", side="left")
-    >>> body.add(name="eye", side="right")
+    
+    # >>> body.add(name="eye", side="left")
+    # >>> body.add(name="eye", side="right")
     
     #>>> len(body.get(name="eye"))
     #2
     
     >>> fingers = "thumb index middle ring pinky".split()
     >>> sides = ["left", "right"]
-    >>> body.add_all(name=fingers, side=sides, is_a=["finger"])
     
+    # >>> body.add_all(name=fingers, side=sides, is_a=["finger"])
     #>>> len(body.get(is_a="finger))
     #10
     
     There are ways for manipulating entries:
     
-    >>> x = body.get(name="eye", side="left")
+    # >>> x = body.get(name="eye", side="left")
     
     # >>> body[x] == {x: {"name":{"eye"}, "side":{"left"}}}
-    >>> body[x:"color"] = "blue"
+    # >>> body[x:"color"] = "blue"
     
     #>>> body[x:"color"]
     #"blue"
     """
     
-    _spo = {}  # {subject: {predicate: set([object])}}
-    _pos = {}  # {predicate: {object: set([subject])}}
-    _osp = {}  # {subject: {subject, set([predicate])}}
+    def __init__(self):
+        self._spo = {}  # {subject: {predicate: set([object])}}
+        self._pos = {}  # {predicate: {object: set([subject])}}
+        self._osp = {}  # {subject: {subject, set([predicate])}}
     
     def __setitem__(self, key, value):
         def add2index(index, a, b, c):
@@ -116,17 +112,19 @@ class TripleStore:
                     index[a][b].add(c)
         
         if not isinstance(key, slice):
-            raise RuntimeWarning("must be store[s:p] = o")
+            raise StoreException("must be store[s:p] = o")
         elif key.step is not None:
-            raise RuntimeWarning("slice must be two-part, not three")
+            raise StoreException("slice must be two-part, not three")
         else:
             s = key.start if isinstance(key.start, E) else E(key.start)
             p = key.stop
+            if not isinstance(p, BasePredicate):
+                raise StoreException("%s must be a Predicate()."%p)
             o = value
             add2index(self._spo, s, p, o)
             add2index(self._pos, p, o, s)
             add2index(self._osp, o, s, p)
-                      
+        
     def __getitem__(self, key):
         """
         Return iterator over triplets directly as result.
@@ -151,9 +149,23 @@ class TripleStore:
         # we query for an entity directly
         if not isinstance(key, slice):
             assert isinstance(key, E)
+            # This is a bit tricky because P.thing is not a valid identifier.
+            # This becomes a problem if different sets of predicates are defined
+            # as namespaces with conflicting names.
+            # In this case, we resolve the conflict the django-way by mangling
+            # predicates to P__thing.
             properties = self._spo[key]
-            return namedtuple(f"{str(key)}", properties.keys())(**properties)
-        else: 
+            try:
+                return namedtuple(f"{str(key)}", 
+                              [p.name for p in properties.keys()])(
+                                **{k.name:v for k, v in properties.items()})
+            except ValueError:
+                return namedtuple(f"{str(key)}", 
+                        [f"{p.__class__.__name__}__{p.name}"
+                         for p in properties.keys()])(
+                    **{f"{k.__class__.__name__}__{k.name}":v 
+                         for k, v in properties.items()})
+        else:
             s, p, o = key.start, key.stop, key.step
             
         case = {(True, True, True): lambda: ((s, p, o) 
@@ -191,13 +203,17 @@ class TripleStore:
         for p, o in properties.items():
             self[s:p] = o
     
-    def add_all(self, **lists_of_properties):
+    def add_all(self, entities=None, **lists_of_properties):
+        assert all(isinstance(x, list) for x in lists_of_properties.values())
+        
+        for p, o in lists_of_properties.items():
+            pass
+            
+    
+    def get(self, **clauses):
         pass
     
-    def get_all(self, **clauses):
-        pass
-    
-    def get_last(self):
+    def get_last_added(self):
         return list(self._spo.keys())[-1]
     
     def query(self,clauses):        

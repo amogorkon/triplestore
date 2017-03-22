@@ -3,13 +3,21 @@ from pytest import fixture
 from unittest.mock import Mock
 from unittest import skip
 
-from store.triplestore import TripleStore, E, P, Query
+from store.store import TripleStore, E, BasePredicate, Query
 
 @fixture
 def store():
     return TripleStore()
 
-def test_store(store):
-    store.add(name="Anselm Kiefner")
-    e = store.get_last()
-    assert store[e].name == "Anselm Kiefner"
+@fixture
+def P():
+    class Predicate(BasePredicate):
+        name = 1
+        side = 2
+        is_a = 3
+    return Predicate
+
+def test_store(store, P):
+    e = E()
+    store[e:P.name] = "Anselm"
+    assert store[e].name == {"Anselm"}
