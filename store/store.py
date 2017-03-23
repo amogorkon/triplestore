@@ -1,6 +1,6 @@
 
 from uuid import uuid4, UUID
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from enum import Enum
 from itertools import product
 
@@ -101,6 +101,11 @@ class TripleStore:
         self._spo = {}  # {subject: {predicate: set([object])}}
         self._pos = {}  # {predicate: {object: set([subject])}}
         self._osp = {}  # {subject: {subject, set([predicate])}}
+        # sic!
+        self._checks = defaultdict(lambda: lambda o: True)
+    
+    def set_check(self, p, func):
+        self._checks[p] = func
     
     def __setitem__(self, key, value):
         def add2index(index, a, b, c):
@@ -122,6 +127,8 @@ class TripleStore:
             if not isinstance(p, BasePredicate):
                 raise StoreException("%s must be a Predicate()."%p)
             o = value
+            if not self._checks[p](o):
+                raise StoreException("%s does not match the set criteria for this predicate"%o)
             add2index(self._spo, s, p, o)
             add2index(self._pos, p, o, s)
             add2index(self._osp, o, s, p)
