@@ -98,9 +98,12 @@ class TripleStore:
     """
     
     def __init__(self):
+        # weakrefs would be nice to have here, but it can't be guaranteed
+        # that these are the only references to entities, which makes weakrefs 
+        # not only pointless but also dangerous.
         self._spo = {}  # {subject: {predicate: set([object])}}
         self._pos = {}  # {predicate: {object: set([subject])}}
-        self._osp = {}  # {subject: {subject, set([predicate])}}
+        self._osp = {}  # {object: {subject, set([predicate])}}
         # sic!
         self._checks = defaultdict(lambda: lambda o: True)
     
@@ -208,6 +211,11 @@ class TripleStore:
     
     def __len__(self):
         return len(self._spo)
+    
+    def __iter__(self):
+        return ((SUB, PRED, OBJ) for SUB, predset in self._spo.items()
+                                for PRED, objset in predset.items()
+                                for OBJ in objset)
     
     def add(self, d, s=None):
         """Convenience method to add a new item to the store."""
