@@ -1,22 +1,24 @@
 
-name: stay
-description: Simple, even Trivial Alternative to Yaml
+name: TripleStore for Python 3
+description: Pure Python TripleStore implementation for arbitrary entity relations.
 license: MIT
-url: https://github.com/amogorkon/stay
-version: 0.1.10.post6
+url: https://github.com/amogorkon/triplestore
+version: 0.1.1
 author: Anselm Kiefner
-author_email: stay-pypi@anselm.kiefner.de
+author_email: triplestore-pypi@anselm.kiefner.de
 python_requires: >3.5
 
-keywords: [json yaml toml config simple alternative]
+keywords: [triplestore rdf semantic web sparql]
 classifiers:::[
-	Development Status :: 4 - Beta
+	Development Status :: 3 - Alpha
 	Intended Audience :: Developers
+	Intended Audience :: Science/Research
+	Intended Audience :: Information Technology
 	Natural Language :: English
 	License :: OSI Approved :: MIT License
 	Operating System :: OS Independent
 	Programming Language :: Python :: 3 :: Only
-	Programming Language :: Python :: Implementation :: CPython
-	Topic :: Text Processing :: Markup
+	Topic :: Scientific/Engineering :: Information Analysis
+	Topic :: Database
 ]:::
                         
