@@ -11,3 +11,5 @@ box/*
 DEV*
 box
 build/
+dist/
+src/TripleStore.egg-info/
