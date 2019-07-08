@@ -10,3 +10,4 @@ box/*
 .mypy_cache/*
 DEV*
 box
+build/
