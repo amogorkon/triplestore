@@ -1,6 +1,6 @@
 
-name: TripleStore for Python 3
-description: Pure Python TripleStore implementation for arbitrary entity relations.
+name: TripleStore
+description: Pure Python 3 triplestore for arbitrary entity relations.
 license: MIT
 url: https://github.com/amogorkon/triplestore
 version: 0.1.1
