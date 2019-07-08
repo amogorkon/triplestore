@@ -1,0 +1,22 @@
+
+name: stay
+description: Simple, even Trivial Alternative to Yaml
+license: MIT
+url: https://github.com/amogorkon/stay
+version: 0.1.10.post6
+author: Anselm Kiefner
+author_email: stay-pypi@anselm.kiefner.de
+python_requires: >3.5
+
+keywords: [json yaml toml config simple alternative]
+classifiers:::[
+	Development Status :: 4 - Beta
+	Intended Audience :: Developers
+	Natural Language :: English
+	License :: OSI Approved :: MIT License
+	Operating System :: OS Independent
+	Programming Language :: Python :: 3 :: Only
+	Programming Language :: Python :: Implementation :: CPython
+	Topic :: Text Processing :: Markup
+]:::
+                        

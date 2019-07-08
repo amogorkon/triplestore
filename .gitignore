@@ -1,8 +1,12 @@
-DEV\ *
 .ipynb_checkpoints/
 .cache
+.hypothesis
+.pytest_cache
 __pycache__
 store/__pycache__
 TODO*
 .hypothesis
 box/*
+.mypy_cache/*
+DEV*
+box
