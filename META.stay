@@ -1,24 +1,2 @@
 
-name: TripleStore
-description: Pure Python 3 triplestore for arbitrary entity relations.
-license: MIT
-url: https://github.com/amogorkon/triplestore
-version: 0.1.1
-author: Anselm Kiefner
-author_email: triplestore-pypi@anselm.kiefner.de
-python_requires: >3.5
-
-keywords: [triplestore rdf semantic web sparql]
-classifiers:::[
-	Development Status :: 3 - Alpha
-	Intended Audience :: Developers
-	Intended Audience :: Science/Research
-	Intended Audience :: Information Technology
-	Natural Language :: English
-	License :: OSI Approved :: MIT License
-	Operating System :: OS Independent
-	Programming Language :: Python :: 3 :: Only
-	Topic :: Scientific/Engineering :: Information Analysis
-	Topic :: Database
-]:::
                         

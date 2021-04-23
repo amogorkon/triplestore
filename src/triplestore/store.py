@@ -1,20 +1,17 @@
 
-from uuid import uuid4, UUID
-from collections import namedtuple, defaultdict
-
-from inspect import isclass
-from itertools import product, chain
-from dataclasses import dataclass
-from warnings import warn
+from collections import defaultdict, namedtuple
 from collections.abc import Set
-
-from typing import List
-
+from dataclasses import dataclass
 # unused?
 from enum import Enum
-
+from inspect import isclass
+from itertools import chain, product
 # remove after dev
 from pprint import pprint
+from typing import List
+from uuid import UUID, uuid4
+from warnings import warn
+
 
 class StoreException(UserWarning):
     """All Exceptions specific to this package for easy filtering."""
@@ -124,13 +121,13 @@ class TripleStore:
         
         # we query for an entity directly
         if not isinstance(key, slice):
-            assert isinstance(key, E) or isinstance(key, Triple)
+            assert isinstance(key, (E, Triple))
             # we return a dict of p:o that we can use in set_all, producing a nice symmetry
             # this is in contrast to the slice method, which returns sets of objects
             return self._spo[key]
         else:
             s, p, o = key.start, key.stop, key.step
-            
+
         # Observe that cases with only one False return no Triples but the values themselves
         # this way, the results can be used directly in an assignment.
         case = {(True, True, True): lambda: {Triple(s, p, o) 
@@ -138,11 +135,13 @@ class TripleStore:
                                              if o in self._spo[s][p]},
               (True, True, False): lambda: {OBJ for OBJ in self._spo[s][p]},
               (True, False, True): lambda: {PRED 
-                                            for PRED in self._osp[o][s] if PRED in self._osp[o][s]},
+                                            for PRED in self._osp[o][s] 
+                                            if PRED in self._osp[o][s]},
               (True, False, False): lambda: {Triple(s, PRED, OBJ) 
                                              for PRED, objset in self._spo[s].items()
                                              for OBJ in objset},
-              (False, True, True): lambda: {SUB for SUB in self._pos[p][o]},
+              (False, True, True): lambda: {SUB 
+                                            for SUB in self._pos[p][o]},
               (False, True, False): lambda: {Triple(SUB, p, OBJ) 
                                              for OBJ, subset in self._pos[p].items() 
                                              for SUB in subset},
@@ -212,16 +211,13 @@ class TripleStore:
     def __setitem__(self, key, value):
         assert isinstance(key, slice), "Must be assigned using a slice (ex: Store[:foo:] = 23)."
         assert isinstance(key.stop, Predicate), "Predicate MUST be specified in slice."
-        
+
         p = key.stop
         o = value
-        
-        if not (isinstance(key.start, E) or isinstance(key.start, Triple)):
-            results = []
+
+        if not isinstance(key.start, (E, Triple)):
             S = key.start
-            for s in S:
-                results.append(self.add(s=s, p=p, o=o))
-            return results
+            return [self.add(s=s, p=p, o=o) for s in S]
         else:
             s = key.start
             return self.add(s=s, p=p, o=o)
