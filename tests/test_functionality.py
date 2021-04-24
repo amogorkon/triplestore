@@ -1,9 +1,16 @@
+import os
+import sys
+
+here = os.path.split(os.path.abspath(os.path.dirname(__file__)))
+src = os.path.join(here[0], "src")
+sys.path.insert(0,src)
+
+from unittest import skip
+from unittest.mock import Mock
 
 from pytest import fixture, raises
-from unittest.mock import Mock
-from unittest import skip
+from triplestore.store import E, Predicate, Query, Triple, TripleStore
 
-from store.store import TripleStore, E, Predicate, Query, Triple
 
 @fixture
 def body():

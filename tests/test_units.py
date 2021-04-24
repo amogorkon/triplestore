@@ -1,9 +1,18 @@
+import os
+import sys
 
-from hypothesis import strategies as st, assume, given
-from pytest import fixture, raises
+here = os.path.split(os.path.abspath(os.path.dirname(__file__)))
+src = os.path.join(here[0], "src")
+sys.path.insert(0,src)
+
+
 from unittest import TestCase, skip
 
-from store.store import TripleStore, E, Predicate, Query, QuerySet
+from hypothesis import assume, given
+from hypothesis import strategies as st
+from pytest import fixture, raises
+from triplestore.store import E, Predicate, Query, QuerySet, TripleStore
+
 
 @given(st.text())
 def test_E(url):
@@ -18,7 +27,7 @@ def test_E(url):
     e3 = E()
     assert e1 != e3
     # The id argument must be a valid UUID.
-    with raises(AttributeError, message="'int' object has no attribute 'replace'"):
+    with raises(AttributeError):
         E(id_=2)
     # Let's use all arguments.
     e4 = E(name='test', id_='b19102c6-20b8-4afb-8520-ef910b1dc93b',url=url)

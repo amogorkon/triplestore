@@ -284,9 +284,6 @@ class TripleStore:
         """Get the item that was last added to the store."""
         return list(self._spo.keys())[-1]
     
-    def undo(self):
-        raise NotImplementedError
-    
     def __delitem__(self, item):
         raise NotImplementedError
         
