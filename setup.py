@@ -1,5 +1,6 @@
 
 import os
+import pathlib
 import sys
 
 here = (os.path.abspath(os.path.dirname(__file__)))
@@ -9,11 +10,9 @@ sys.path.append(src)
 from setuptools import find_packages
 from setuptools import setup
 
-with open("README.md") as f:
-    LONG_DESCRIPTION = f.read()
-  
+LONG_DESCRIPTION = pathlib.Path("README.md").read_text()
 setup(
-    
+
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     long_description=LONG_DESCRIPTION,
@@ -24,10 +23,10 @@ setup(
     description="Python 3 triplestore for arbitrary entity relations and inference.",
     license= "MIT",
     url="https://github.com/amogorkon/triplestore",
-    version="0.1.1",
+    version="0.2.0",
     author="Anselm Kiefner",
     author_email="triplestore-pypi@anselm.kiefner.de",
-    python_requires= ">=3.8",
+    python_requires= ">=3.12",
 
     keywords=["triplestore", "rdf", "semantic", "web", "sparql"],
     classifiers=[

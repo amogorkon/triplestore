@@ -1,17 +1,8 @@
-import os
-import sys
-
-here = os.path.split(os.path.abspath(os.path.dirname(__file__)))
-src = os.path.join(here[0], "src")
-sys.path.insert(0,src)
-
-
-from unittest import TestCase, skip
-
-from hypothesis import assume, given
+from hypothesis import given
 from hypothesis import strategies as st
-from pytest import fixture, raises
-from triplestore.store import E, Predicate, Query, QuerySet, TripleStore
+from pytest import raises
+
+from triplestore.main import E, Predicate
 
 
 @given(st.text())
@@ -30,21 +21,24 @@ def test_E(url):
     with raises(AttributeError):
         E(id_=2)
     # Let's use all arguments.
-    e4 = E(name='test', id_='b19102c6-20b8-4afb-8520-ef910b1dc93b',url=url)
+    e4 = E(name="test", id_="b19102c6-20b8-4afb-8520-ef910b1dc93b", url=url)
     assert str(e4) == "test"
-    assert repr(e4) == f"E(name='test', id_='b19102c6-20b8-4afb-8520-ef910b1dc93b', url='{url}')"
+    assert (
+        repr(e4)
+        == f"E(name='test', id_='b19102c6-20b8-4afb-8520-ef910b1dc93b', url='{url}')"
+    )
     # repr code often is quite noisy, so we need to check that
     assert repr(e1) == f"E(id_='{e1.id}')"
     test = E(name="test")
     assert str(test) == "test"
     assert repr(test) == f"E(name='test', id_='{test.id}')"
-    
+
+
 def test_Predicate():
     class Test(Predicate):
         def validate(self, value):
             return isinstance(value, str)
-        
+
     test = Test()
     assert test.validate("test")
     assert test.name == "Test"
-    
