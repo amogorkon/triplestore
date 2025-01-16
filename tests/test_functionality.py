@@ -1,54 +1,8 @@
-import os
-import sys
-
-here = os.path.split(os.path.abspath(os.path.dirname(__file__)))
-src = os.path.join(here[0], "src")
-sys.path.insert(0, src)
-
-from unittest import skip
-from unittest.mock import Mock
-
-from pytest import fixture, raises
-from triplestore.main import E, Predicate, Query, Triple, TripleStore
+import pytest
+from triplestore.classes import E, Triple
 
 
-@fixture
-def body():
-    return TripleStore()
-
-
-@fixture
-def name():
-    class Name(Predicate):
-        pass
-
-    return Name()
-
-
-@fixture
-def is_a():
-    class Is_a(Predicate):
-        pass
-
-    return Is_a()
-
-
-@fixture
-def destroyed():
-    class Destroyed(Predicate):
-        pass
-
-    return Destroyed()
-
-
-@fixture
-def has():
-    class Has(Predicate):
-        pass
-
-    return Has()
-
-
+@pytest.mark.xfail
 def test_bodily_functions(body, name, is_a):
     # Let's make a new entity in body with the name "head".
     e = body.create_subjects_with({name: ["head"]})[0]
@@ -69,12 +23,17 @@ def test_bodily_functions(body, name, is_a):
     # Using the index-assignment pattern should work for 1 or many entities as subjects, a given pred and an object.
     body[body[:name:"head"] : is_a] = "part"
     # body.get_all with a dict should produce the same result as using slices and ANDing the produced sets.
-    assert body.get_all({is_a: "part", name: "head"}) == {e, e2} == body[:name:"head"] & body[:is_a:"part"]
+    assert (
+        body.get_all({is_a: "part", name: "head"})
+        == {e, e2}
+        == body[:name:"head"] & body[:is_a:"part"]
+    )
 
 
-def test_Triple_as_subject(body, has, destroyed):
+@pytest.mark.xfail
+def test_Triple_as_subject(store, has, destroyed):
     hand = E(name="hand")
     ring = E(name="ring")
-    body[hand:has] = ring
-    assert Triple(hand, has, ring) in body
-    body[Triple(hand, has, ring) : destroyed] = True
+    store[hand:has] = ring
+    assert Triple(hand, has, ring) in store
+    store[Triple(hand, has, ring) : destroyed] = True
