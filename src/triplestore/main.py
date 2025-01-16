@@ -8,17 +8,13 @@ There is a simple key-value with {int: Any}, where the key is the uuid5 of the v
 
 The triplestore itself is a set of three dicts that work together as one. Each dict is a mapping of {int: {int: Set[int]}}, only operating on the uuids of entities and predicates.
 To resolve the uuids back to their names, we check the key-value store.
-The triplestore-dicts are implemented via hdf5, which is possible because we only store triplets of integers of known length. This way we can load sections of relations as needed.
+The triplestore-dicts can be implemented in different ways, taking into account that they are only dealing with {int: Set[int]}.
 
 """
 
-from pathlib import Path
+from triplestore.classes import TripleStore, Value
 
-from triplestore.hdf import RelationStore as Relations
-from triplestore.logic import TripleStore, set_globals
-from triplestore.shelve_kv_store import ShelveKVStore as Store
+kv_store: dict[int, Value] = {}
+relations: dict[int, set[int]] = {}
 
-store = Store(Path().home() / ".triplestore/store.db")
-relations = Relations(Path().home() / ".triplestore/relations.h5")
-set_globals(store, relations)
-logic = TripleStore()
+store = TripleStore(kv_store=kv_store, relations=relations)
