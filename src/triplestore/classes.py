@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from functools import singledispatchmethod
 from itertools import product
-from typing import Any
+from typing import Any, Generator
 from uuid import NAMESPACE_DNS, uuid4, uuid5
 
 from beartype import beartype
@@ -24,57 +25,70 @@ class NotFound(StoreException):
     pass
 
 
-class Triple:
-    """A triple of (subject, predicate, object)."""
+class E(int):
+    __slots__ = ()
 
-    __slots__ = ("_s", "_p", "_o")
-
-    def __init__(self, s: int, p: int, o: int):
-        self._s = s
-        self._p = p
-        self._o = o
-
-    @property
-    def s(self):
-        return E(self._s)
-
-    @property
-    def p(self):
-        return E(self._p)
-
-    @property
-    def o(self):
-        return E(self._o)
-
-
-class E:
-    __slots__ = ("id",)
-
-    def __init__(self, id_: int | None = None):
+    def __new__(cls, id_: int | None = None) -> E:
         if id_ is None:
             id_ = uuid4().int
         assert isinstance(id_, int)
-        self.id = id_
+        return super().__new__(cls, id_)
 
     @classmethod
-    def from_value(cls, value):
+    def from_str(cls, value: str) -> E:
         id_ = uuid5(NAMESPACE_DNS, value).int
         if id_ not in _kv_store:
             _kv_store[id_] = value
         return cls(id_)
 
     @property
-    def value(self):
-        return _kv_store[self.id]
+    def value(self) -> Any:
+        return _kv_store[self]
 
     def __repr__(self):
-        return f"E({self.id})"
+        return f"E({super().__repr__()})"
 
     def __str__(self):
-        return _kv_store.get(self.id) or f"E({self.id})"
+        return f"E({hex(self)[2:9]}..)" if len(hex(self)) > 9 else f"E({hex(self)[2:]})"
 
-    def __eq__(self, other):
-        return self.id == other.id
+
+class Triple:
+    """A triplet of subjects, predicates, and objects."""
+
+    __slots__ = ("s_", "p_", "o_")
+
+    def __init__(self, s: int, p: int, o: int):
+        self.s_ = s
+        self.p_ = p
+        self.o_ = o
+
+    @property
+    def s(self):
+        return E(self.s_)
+
+    @property
+    def p(self):
+        return E(self.p_)
+
+    @property
+    def o(self):
+        return E(self.o_)
+
+    def __iter__(self):
+        yield self.s
+        yield self.p
+        yield self.o
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Triple):
+            return False
+        return self.s_ == other.s_ and self.p_ == other.p_ and self.o_ == other.o_
+
+    def __hash__(self):
+        return (self.s_ ^ (self.p_ << 1) ^ (self.o_ << 2)) & ((1 << 128) - 1)
+
+    def __repr__(self):
+        return f"Triple(s={int(self.s)}, p={int(self.p)}, o={int(self.o)})"
 
 
 class Value:
@@ -90,8 +104,8 @@ class Value:
     def __str__(self):
         return str(self.value)
 
-    def __eq__(self, other):
-        return self.value == other.value
+    def __eq__(self, other: object) -> bool:
+        return self.value == other.value if isinstance(other, Value) else False
 
     def validate(self):
         return isinstance(self.value, self.type)
@@ -112,57 +126,84 @@ class TripleStore:
         "{object: {subject: set([predicate])}}"
 
     @beartype
-    def __getitem__(self, key: slice):
+    def __getitem__(self, key: slice | Triple | int) -> set[Triple]:
         """
-        Return iterator over triplets directly as result.
+        Get directly a result.
+
+        May return a set of entities/ints, a dict of attributes, or a set of triples
 
         This is a mechanism inspired by the brilliant way numpy handles
         arrays and its vectorization methods.
         Another way of querying is the .get() method inspired by django which
         returns a Query object, representing a view on the dictionary to be evaluated lazily.
         """
-        if not isinstance(key, slice):
-            return self._spo[key]
-        s, p, o = key.start, key.stop, key.step
+        # Indexing store with an entity as single argument should return a dict with its attributes.
+        if isinstance(key, int):
+            return {
+                Triple(key, PRED, OBJ)
+                for PRED, objset in self._spo[key].items()
+                for OBJ in objset
+            }
+        s: int | None = key.start  # type: ignore
+        p: int | None = key.stop  # type: ignore
+        o: int | None = key.step  # type: ignore
 
-        assert isinstance(s, (E, None))
+        assert isinstance(s, int | None)
+        assert isinstance(p, int | None)
+        assert isinstance(o, int | None)
 
-        match (s is not None, p is not None, o is not None):
-            case (True, True, True):
-                return {Triple(s, p, o) for _ in (1,) if o in self._spo[s][p]}
-            case (True, True, False):
-                return (set(self._spo[s][p]),)
-            case (True, False, True):
-                return {PRED for PRED in self._osp[o][s] if PRED in self._osp[o][s]}
-            case (True, False, False):
-                return {
-                    Triple(s, PRED, OBJ)
-                    for PRED, objset in self._spo[s].items()
-                    for OBJ in objset
-                }
-            case (False, True, True):
-                return (set(self._pos[p][o]),)
-            case (False, True, False):
-                return (
-                    {
+        try:
+            match (s is not None, p is not None, o is not None):
+                case True, True, True:
+                    assert isinstance(s, int)
+                    assert isinstance(p, int)
+                    assert isinstance(o, int)
+                    if o in self._spo[s][p]:
+                        return {Triple(s, p, o)}
+                case True, True, False:
+                    assert isinstance(s, int)
+                    assert isinstance(p, int)
+                    return {Triple(s, p, o) for o in self._spo[s][p]}
+                case (True, False, True):
+                    assert isinstance(s, int)
+                    assert isinstance(o, int)
+                    return {Triple(s, p_, o) for p_ in self._osp[o][s]}
+                case False, True, True:
+                    assert isinstance(p, int)
+                    assert isinstance(o, int)
+                    return {Triple(s_, p, o) for s_ in self._pos[p][o]}
+                case True, False, False:
+                    assert isinstance(s, int)
+                    return {
+                        Triple(s, PRED, OBJ)
+                        for PRED, objset in self._spo[s].items()
+                        for OBJ in objset
+                    }
+                case False, True, False:
+                    assert isinstance(p, int)
+                    return {
                         Triple(SUB, p, OBJ)
                         for OBJ, subset in self._pos[p].items()
                         for SUB in subset
-                    },
-                )
-            case (False, False, True):
-                return {
-                    Triple(SUB, PRED, o)
-                    for SUB, predset in self._osp[o].items()
-                    for PRED in predset
-                }
-            case (False, False, False):
-                return {
-                    Triple(SUB, PRED, OBJ)
-                    for SUB, predset in self._spo.items()
-                    for PRED, objset in predset.items()
-                    for OBJ in objset
-                }
+                    }
+                case False, False, True:
+                    assert isinstance(o, int)
+                    return {
+                        Triple(SUB, PRED, o)
+                        for SUB, predset in self._osp[o].items()
+                        for PRED in predset
+                    }
+                case False, False, False:
+                    return {
+                        Triple(s_, p_, o_)
+                        for s_, PRED in self._spo.items()
+                        for p_, OBJ in PRED.items()
+                        for o_ in OBJ
+                    }
+        except KeyError:
+            return set()
+        assert False, "Should never reach this point, but needed for type checking."
+        return set()
 
     @beartype
     def __len__(self) -> int:
@@ -172,61 +213,55 @@ class TripleStore:
     def __iter__(self):
         """Return the same iterator as Store[::] for convenience."""
         return (
-            (SUB, PRED, OBJ)
+            Triple(SUB, PRED, OBJ)
             for SUB, predset in self._spo.items()
             for PRED, objset in predset.items()
             for OBJ in objset
         )
 
     @beartype
-    def __contains__(self, value: tuple[int, int, int]) -> bool:
-        s, p, o = value
+    def __contains__(self, triple: Triple) -> bool:
         try:
-            return o in self._spo[s][p]
+            return triple.o in self._spo[triple.s][triple.p]
         except KeyError:
             return False
 
-    @singledispatchmethod
-    def add(self, arg):
-        raise NotImplementedError("Unsupported type")
-
-    @add.register(Triple)
-    def add_triple(self, triple: Triple):
+    def add_triple(self, triple: Triple) -> Triple:
         assert isinstance(triple, Triple)
-        s, p, o = triple.s.id, triple.p.id, triple.o.id
+        s, p, o = triple
+        return self._add_triple_to_indexes(s, p, o)
+
+    def add(self, s: int, p: int, o: int) -> Triple:
+        assert isinstance(s, int)
+        assert isinstance(p, int)
+        assert isinstance(o, int)
+        return self._add_triple_to_indexes(s, p, o)
+
+    def _add_triple_to_indexes(self, s: int, p: int, o: int):
         _add2index(self._spo, s, p, o)
         _add2index(self._pos, p, o, s)
         _add2index(self._osp, o, s, p)
         return Triple(s, p, o)
 
     @beartype
-    @add.register(E)
-    def add(self, s: E, p: E, o: E) -> Triple:
-        assert isinstance(s, E)
-        assert isinstance(p, E)
-        assert isinstance(o, E)
-        s, p, o = s.id, p.id, o.id
-
-        _add2index(self._spo, s, p, o)
-        _add2index(self._pos, p, o, s)
-        _add2index(self._osp, o, s, p)
-        return Triple(s, p, o)
-
-    @beartype
-    def __setitem__(self, key: slice, value: int):
+    def __setitem__(self, key: slice, value: int) -> Triple | list[Triple]:
         assert isinstance(key, slice), (
             "Must be assigned using a slice (ex: Store[:foo:] = 23)."
         )
+        assert isinstance(key, slice)
 
+        s = key.start
         p = key.stop
         o = value
 
-        if not isinstance(key.start, (int, Triple)):
+        if not isinstance(s, (int, Triple)):
             return [self.add(s=s, p=p, o=o) for s in key.start]
         return self.add(s=key.start, p=p, o=o)
 
     @beartype
-    def create_subjects_with(self, predobjects: dict[int, list[int]]) -> list[int]:
+    def create_subjects_with(
+        self, predobjects: dict[int, list[int]]
+    ) -> Generator[Triple, None, None]:
         """Add all combinations of predicate:object to the store and create new entities for each combo.
 
         From a dict of key:[list of values] we produce a list of all combinations
@@ -235,28 +270,22 @@ class TripleStore:
 
         """
         combinations = product(*[[(k, v) for v in predobjects[k]] for k in predobjects])
-        subjects = []
         # Trick is to create new entities with a sentinel of None so there is an indefinite amount
         for C, s in zip(combinations, iter(int, None)):
             for p, o in C:
-                self.add(s=s, p=p, o=o)
-            subjects.append(s)
-        return subjects
+                yield self.add(s=s, p=p, o=o)
 
     @beartype
     def set_all(
         self, *, subjects: list[int], predobjects: dict[int, list[int]]
-    ) -> list[Triple]:
-        results = []
+    ) -> None:
         for s in subjects:
             for p, O in predobjects.items():  # noqa: E741
                 for o in O:
-                    r = self.add(s=s, p=p, o=o)
-                    results.append(r)
-        return results
+                    self.add(s=s, p=p, o=o)
 
     @beartype
-    def get(self, clause_dict: dict[int, int]) -> Triple | None:
+    def get(self, clause_dict: dict[int, int], default: Any = None) -> Triple | None:
         """Get the item from the store that matches ALL clauses."""
         clauses = list(clause_dict.items())
         k, v = clauses.pop()
@@ -266,7 +295,7 @@ class TripleStore:
         if len(result) > 1:
             raise AttributeError("More than a single item matches the criteria.")
         elif not result:
-            return None
+            return default
         else:
             return result.pop()
 
@@ -288,16 +317,20 @@ class TripleStore:
 
     @beartype
     def get_last_added(self) -> int:
-        """Get the item that was last added to the store."""
+        """Get the item that was last added to the store.
+
+        BEWARE: This is not a promise! Depending on the backend, this may not be reliable.
+        Use with caution. This is a convenience method for testing and debugging.
+        """
         return list(self._spo.keys())[-1]
 
     @beartype
-    def __delitem__(self, item: Triple):
+    def __delitem__(self, item: Triple) -> None:
         raise NotImplementedError
 
     @beartype
     def __str__(self) -> str:
-        return "".join(f"{str(s)} {str(p)} {str(o)}\n" for s, p, o in self)
+        return "".join(f"{int(s)} {int(p)} {int(o)}\n" for s, p, o in self)
 
 
 @dataclass
@@ -305,15 +338,15 @@ class Query:
     """Class representing a query to the store."""
 
     store: TripleStore
-    spo: Triple
+    triple: Triple
 
     @beartype
     def __call__(self) -> set[Triple]:
-        return self.store[self.triple[0] : self.triple[1] : self.triple[2]]
+        return self.store[self.triple]
 
 
 class QuerySet:
-    def __init__(self, values):
+    def __init__(self, values: int):
         self.values = values
 
     @beartype
@@ -325,7 +358,7 @@ class QuerySet:
             raise AttributeError(f"{name} is not a method or attribute of set or ")
 
 
-def _add2index(index, a: int, b: int, c: int):
+def _add2index(index: dict[int, dict[int, set[int]]], a: int, b: int, c: int) -> None:
     if a not in index:
         index[a] = {b: {c}}
     else:
