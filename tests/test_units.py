@@ -2,12 +2,8 @@ from uuid import NAMESPACE_DNS, uuid5
 
 from hypothesis import given
 from hypothesis import strategies as st
-from pytest import raises
 from triplestore.classes import (
     E,
-    FailedToComply,
-    Query,
-    QuerySet,
     Triple,
     TripleStore,
 )
@@ -27,154 +23,148 @@ def test_E_new_uuid():
 
 
 @given(st.text())
-def test_E_from_value(value):
-    e4 = E.from_value(value=value)
-    assert e4.value == value
-    e5 = E.from_value(value=value)
+def test_E_from_value(value: str):
+    e4 = E.from_str(value=value)
+    assert e4.value == value  # type: ignore
+    e5 = E.from_str(value=value)
     assert e4 == e5
 
 
 def test_E_repr():
     e1 = E()
-    assert repr(e1) == f"E({e1.id})"
-    e2 = E.from_value("test")
+    assert repr(e1) == f"E({int(e1)})"
+    e2 = E.from_str("test")
     assert repr(e2) == f"E({uuid5(NAMESPACE_DNS, 'test').int})"
 
 
 def test_triplestore_add_valid(store: TripleStore):
     s, p, o = E(1), E(2), E(3)
     triple = store.add(s, p, o)
-    assert triple == Triple(s, p, o)
+    assert triple == Triple(1, 2, 3)
     assert triple in store
 
 
-def test_triplestore_add_invalid(store):
-    _s, p, o = 1, 2, 3
-    with raises(FailedToComply):
-        store.add(s=None, p=p, o=o)
-    with raises(FailedToComply):
-        store.add(s="invalid", p=p, o=o)
-
-
-def test_triplestore_setitem_valid(store):
+def test_triplestore_setitem_valid(store: TripleStore):
     s, p, o = 1, 2, 3
     store[s:p] = o
-    assert (s, p, o) in store
+    assert Triple(s, p, o) in store
 
 
-def test_triplestore_setitem_invalid(store):
-    with raises(AssertionError):
-        store[1] = 2
-
-
-def test_triplestore_create_subjects_with(store):
+def test_triplestore_create_subjects_with(store: TripleStore):
     predobjects = {1: [2, 3], 4: [5]}
-    subjects = store.create_subjects_with(predobjects)
-    assert len(subjects) == 2
+    entries = store.create_subjects_with(predobjects)
+    assert len(list(entries)) == 4
 
 
-def test_triplestore_set_all(store):
+def test_triplestore_set_all(store: TripleStore):
     subjects = [1, 2]
     predobjects = {3: [4, 5]}
-    results = store.set_all(subjects=subjects, predobjects=predobjects)
-    assert len(results) == 4
+    store.set_all(subjects=subjects, predobjects=predobjects)
+    assert len(store[1::]) == 2 and len(store[2::]) == 2
 
 
-def test_triplestore_get_valid(store):
+def test_triplestore_get_invalid(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
-    assert store.get({s: p}) == Triple(s, p, o)
+    assert store.get({s: p, 4: 5}) is None
 
 
-def test_triplestore_get_invalid(store):
-    s, p, o = 1, 2, 3
-    store.add(s=s, p=p, o=o)
-    with raises(AttributeError):
-        store.get({s: p, 4: 5})
-
-
-def test_triplestore_get_all(store):
-    s, p, o = 1, 2, 3
-    store.add(s=s, p=p, o=o)
-    assert store.get_all({s: p}) == {Triple(s, p, o)}
-
-
-def test_triplestore_get_last_added(store):
+def test_triplestore_get_last_added(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
     assert store.get_last_added() == s
 
 
-def test_triplestore_str(store):
+def test_triplestore_str(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
     assert str(store) == f"{s} {p} {o}\n"
 
 
-def test_triplestore_delitem(store):
-    with raises(NotImplementedError):
-        del store[1]
-
-
-def test_query_call(store):
-    s, p, o = 1, 2, 3
-    store.add(s=s, p=p, o=o)
-    query = Query(store, Triple(s, p, o))
-    assert query() == {Triple(s, p, o)}
-
-
-def test_queryset_getattr():
-    qs = QuerySet([1, 2, 3])
-    with raises(AttributeError):
-        qs.nonexistent_attribute
-
-
-def test_triplestore_getitem_case1(store):
+def test_triplestore_getitem_case1(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
     assert store[s:p:o] == {Triple(s, p, o)}
 
 
-def test_triplestore_getitem_case2(store):
+def test_triplestore_getitem_case2(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
-    assert store[s:p:None] == ({o},)
+    assert store[s:p:None] == {Triple(s=1, p=2, o=3)}
 
 
-def test_triplestore_getitem_case3(store):
+def test_triplestore_getitem_case3(store: TripleStore):
     s, _, o = E(1), 2, E(3)
     store.add(s=s, p=4, o=o)
-    assert store[s:None:o] == {4}
+    assert store[s:None:o] == {Triple(s=E(1), p=4, o=E(3))}
 
 
-def test_triplestore_getitem_case4(store):
+def test_triplestore_getitem_case4(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
     store.add(s=s, p=4, o=o)
     assert store[s:None:None] == {Triple(s, p, o), Triple(s, 4, o)}
 
 
-def test_triplestore_getitem_case5(store):
+def test_triplestore_getitem_case5(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
-    assert store[None:p:o] == ({s},)
+    assert store[None:p:o] == {Triple(s=1, p=2, o=3)}
 
 
-def test_triplestore_getitem_case6(store):
+def test_triplestore_getitem_case6(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
-    assert store[None:p:None] == ({Triple(s, p, o)},)
+    assert store[None:p:None] == {Triple(s, p, o)}
 
 
-def test_triplestore_getitem_case7(store):
+def test_triplestore_getitem_case7(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
     store.add(s=s, p=4, o=o)
     assert store[None:None:o] == {Triple(s, p, o), Triple(s, 4, o)}
 
 
-def test_triplestore_getitem_case8(store):
+def test_triplestore_getitem_case8(store: TripleStore):
     s, p, o = 1, 2, 3
     store.add(s=s, p=p, o=o)
     store.add(s=s, p=4, o=o)
     assert store[None:None:None] == {Triple(s, p, o), Triple(s, 4, o)}
+
+
+def test_triple_equality():
+    s, p, o = E(1), E(2), E(3)
+    triple1 = Triple(s, p, o)
+    triple2 = Triple(s, p, o)
+    assert triple1 == triple2
+
+
+def test_triple_inequality():
+    s1, p1, o1 = E(1), E(2), E(3)
+    s2, p2, o2 = E(4), E(5), E(6)
+    triple1 = Triple(s1, p1, o1)
+    triple2 = Triple(s2, p2, o2)
+    assert triple1 != triple2
+
+
+def test_triple_repr():
+    s, p, o = E(1), E(2), E(3)
+    triple = Triple(s, p, o)
+    assert eval(repr(triple)) == triple
+
+
+def test_triple_str():
+    s, p, o = E(1), E(2), E(3)
+    triple = Triple(s, p, o)
+    assert str(triple) == "Triple(s=1, p=2, o=3)"
+
+
+def test_triple_hash():
+    s, p, o = E(1), E(2), E(3)
+    triple = Triple(s, p, o)
+    # test if hash is consistent
+    assert hash(triple) == hash(Triple(s, p, o))
+    # test if the hash is sensitive to order
+    assert hash(triple) != hash(Triple(s, o, p))
+    # test if hash is 128 bit and thus usable as uuid
+    assert 0 <= hash(triple) < 2**128

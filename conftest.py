@@ -6,10 +6,6 @@ from typing import Generator
 import pytest
 from triplestore.classes import TripleStore
 
-index_dir = Path(__file__).parent / "tests/tmp"
-index_dir.mkdir(exist_ok=True)
-index_path = index_dir / "bplustree-testfile.index"
-
 
 @pytest.fixture
 def clean_file(tmp_path) -> Generator[Path, None, None]:
