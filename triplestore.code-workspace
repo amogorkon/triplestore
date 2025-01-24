@@ -4,5 +4,10 @@
 			"path": "./src/"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"python.testing.cwd": "E:\\Dropbox\\code\\triplestore",
+		"terminal.integrated.cwd": "E:\\Dropbox\\code\\triplestore",
+		"python.testing.pytestEnabled": true,
+		"python.analysis.inlayHints.pytestParameters": true
+	}
 }
