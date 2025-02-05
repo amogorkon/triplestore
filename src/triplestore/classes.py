@@ -65,8 +65,8 @@ class E(int):
         return f"E({hex(self)})"
 
     def __str__(self) -> str:
-        hex_str = f"{self:032x}"  # Format to 32 hex digits and pad with zeros
-        return f"E(0x{hex_str})" if len(hex_str) <= 8 else f"E(0x{hex_str[:8]}...)"
+        hex_str = hex(self)
+        return f"E({hex_str[2:9]}..)" if len(hex_str) > 8 else f"E({hex_str[2:]})"
 
     def to_hdf5(self) -> NDArray[np.void]:
         """Convert to HDF5-compatible array"""
