@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from itertools import product
-from typing import Any, Generator
+from typing import Any, Final, Generator
 from uuid import NAMESPACE_DNS, uuid4, uuid5
 
+import numpy as np
 from beartype import beartype
+from numpy.typing import NDArray
 
 _sp: dict[int, set[int]] = {}
 _po: dict[int, set[int]] = {}
@@ -26,30 +29,53 @@ class NotFound(StoreException):
 
 
 class E(int):
+    dtype: Final = np.dtype([("high", "<u8"), ("low", "<u8")])
+    "Static dtype definition for HDF5 serialization"
+
     __slots__ = ()
 
     def __new__(cls, id_: int | None = None) -> E:
         if id_ is None:
             id_ = uuid4().int
-        assert isinstance(id_, int)
         return super().__new__(cls, id_)
 
     @classmethod
     def from_str(cls, value: str) -> E:
         id_ = uuid5(NAMESPACE_DNS, value).int
-        if id_ not in _kv_store:
-            _kv_store[id_] = value
+        _kv_store.setdefault(id_, value)
         return cls(id_)
 
     @property
-    def value(self) -> Any:
-        return _kv_store[self]
+    def value(self) -> str | None:
+        return _kv_store.get(self)
 
-    def __repr__(self):
-        return f"E({super().__repr__()})"
+    @property
+    def high(self) -> int:
+        return self >> 64
 
-    def __str__(self):
-        return f"E({hex(self)[2:9]}..)" if len(hex(self)) > 9 else f"E({hex(self)[2:]})"
+    @property
+    def low(self) -> int:
+        return self & ((1 << 64) - 1)
+
+    @property
+    def uuid(self) -> uuid.UUID:
+        return uuid.UUID(int=self)
+
+    def __repr__(self) -> str:
+        return f"E({hex(self)})"
+
+    def __str__(self) -> str:
+        hex_str = f"{self:032x}"  # Format to 32 hex digits and pad with zeros
+        return f"E(0x{hex_str})" if len(hex_str) <= 8 else f"E(0x{hex_str[:8]}...)"
+
+    def to_hdf5(self) -> NDArray[np.void]:
+        """Convert to HDF5-compatible array"""
+        return np.array((self.high, self.low), dtype=self.dtype)
+
+    @classmethod
+    def from_hdf5(cls, arr: NDArray[np.void]) -> E:
+        """Instantiate from HDF5 data (18ns)"""
+        return cls((arr["high"].item() << 64) | arr["low"].item())
 
 
 class Triple:
