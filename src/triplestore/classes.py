@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-import uuid
+"""
+TripleStore.
+"""
+
 from dataclasses import dataclass
 from itertools import product
 from typing import Any, Final, Generator
-from uuid import NAMESPACE_DNS, uuid4, uuid5
 
 import numpy as np
 from beartype import beartype
 from numpy.typing import NDArray
+
+from .keys import E
 
 _sp: dict[int, set[int]] = {}
 _po: dict[int, set[int]] = {}
@@ -28,77 +32,16 @@ class NotFound(StoreException):
     pass
 
 
-class E(int):
-    dtype: Final = np.dtype([("high", "<u8"), ("low", "<u8")])
-    "Static dtype definition for HDF5 serialization"
-
-    __slots__ = ()
-
-    def __new__(cls, id_: int | None = None) -> E:
-        if id_ is None:
-            id_ = uuid4().int
-        return super().__new__(cls, id_)
-
-    @classmethod
-    def from_str(cls, value: str) -> E:
-        id_ = uuid5(NAMESPACE_DNS, value).int
-        _kv_store.setdefault(id_, value)
-        return cls(id_)
-
-    @property
-    def value(self) -> str | None:
-        return _kv_store.get(self)
-
-    @property
-    def high(self) -> int:
-        return self >> 64
-
-    @property
-    def low(self) -> int:
-        return self & ((1 << 64) - 1)
-
-    @property
-    def uuid(self) -> uuid.UUID:
-        return uuid.UUID(int=self)
-
-    def __repr__(self) -> str:
-        return f"E({hex(self)})"
-
-    def __str__(self) -> str:
-        hex_str = hex(self)
-        return f"E({hex_str[2:9]}..)" if len(hex_str) > 8 else f"E({hex_str[2:]})"
-
-    def to_hdf5(self) -> NDArray[np.void]:
-        """Convert to HDF5-compatible array"""
-        return np.array((self.high, self.low), dtype=self.dtype)
-
-    @classmethod
-    def from_hdf5(cls, arr: NDArray[np.void]) -> E:
-        """Instantiate from HDF5 data (18ns)"""
-        return cls((arr["high"].item() << 64) | arr["low"].item())
-
 
 class Triple:
     """A triplet of subjects, predicates, and objects."""
 
     __slots__ = ("s_", "p_", "o_")
 
-    def __init__(self, s: int, p: int, o: int):
+    def __init__(self, s: E, p: E, o: E):
         self.s_ = s
         self.p_ = p
         self.o_ = o
-
-    @property
-    def s(self):
-        return E(self.s_)
-
-    @property
-    def p(self):
-        return E(self.p_)
-
-    @property
-    def o(self):
-        return E(self.o_)
 
     def __iter__(self):
         yield self.s
@@ -114,7 +57,7 @@ class Triple:
         return (self.s_ ^ (self.p_ << 1) ^ (self.o_ << 2)) & ((1 << 128) - 1)
 
     def __repr__(self):
-        return f"Triple(s={int(self.s)}, p={int(self.p)}, o={int(self.o)})"
+        return f"Triple(s={self.s}, p={self.p}, o={self.o})"
 
 
 class Value:
@@ -269,7 +212,6 @@ class TripleStore:
         _add2index(self._osp, o, s, p)
         return Triple(s, p, o)
 
-    @beartype
     def __setitem__(self, key: slice, value: int) -> Triple | list[Triple]:
         assert isinstance(key, slice), (
             "Must be assigned using a slice (ex: Store[:foo:] = 23)."
@@ -284,7 +226,6 @@ class TripleStore:
             return [self.add(s=s, p=p, o=o) for s in key.start]
         return self.add(s=key.start, p=p, o=o)
 
-    @beartype
     def create_subjects_with(
         self, predobjects: dict[int, list[int]]
     ) -> Generator[Triple, None, None]:
@@ -392,3 +333,81 @@ def _add2index(index: dict[int, dict[int, set[int]]], a: int, b: int, c: int) ->
             index[a][b] = {c}
         else:
             index[a][b].add(c)
+
+
+from uuid import UUID
+
+import numpy as np
+
+# from tree import BPlusTree, TreeConfig
+
+
+class UUID128:
+    def __init__(self, uuid: UUID):
+        self.high = uuid.int >> 64
+        self.low = uuid.int & 0xFFFFFFFFFFFFFFFF
+
+    def to_hdf5(self) -> np.ndarray:
+        return np.array((self.high, self.low), dtype=[("high", "<u8"), ("low", "<u8")])
+
+
+class CompositeKeyEngine:
+    """Responsible for secure composite key generation"""
+
+    # Verified 64-bit primes (Miller-Rabin)
+    PERTURB_HIGH = 0xD1B54A32D192ED03
+    PERTURB_LOW = 0x81B1D42A3B609BED
+    MASK_EVEN = 0xAAAAAAAAAAAAAAAA
+    MASK_ODD = 0x5555555555555555
+
+    @staticmethod
+    def _rot64(x: int, n: int) -> int:
+        return ((x << n) | (x >> (64 - n))) & 0xFFFFFFFFFFFFFFFF
+
+    @classmethod
+    def create_key(cls, a: UUID128, b: UUID128) -> np.ndarray:
+        """Generate composite key for index storage"""
+        # Your V4 composite key logic
+        h = cls._enhanced_mix(a.high ^ b.low, 17) ^ cls.PERTURB_HIGH
+        l = cls._enhanced_mix(a.low ^ b.high, 23) ^ cls.PERTURB_LOW
+
+        rotated_h = cls._rot64(h, 19) ^ (l & cls.MASK_EVEN)
+        rotated_l = cls._rot64(l, 23) ^ (h & cls.MASK_ODD)
+
+        final_high = cls._enhanced_mix(rotated_h ^ rotated_l, 5)
+        final_low = cls._enhanced_mix(rotated_l ^ rotated_h, 11)
+
+        return np.array(
+            (final_high, final_low), dtype=[("high", "<u8"), ("low", "<u8")]
+        )
+
+
+class TripleStore:
+    def __init__(self, storage_path: Path):
+        config = TreeConfig()
+        self._sp = BPlusTree(storage_path / "sp.h5", config)
+        self._po = BPlusTree(storage_path / "po.h5", config)
+        self._os = BPlusTree(storage_path / "os.h5", config)
+        self._keygen = CompositeKeyEngine()
+
+    def add(self, s: UUID, p: UUID, o: UUID):
+        """Add triple through composite key derivation"""
+        s_uuid = UUID128(s)
+        p_uuid = UUID128(p)
+        o_uuid = UUID128(o)
+
+        # Generate index-specific composite keys
+        sp_key = self._keygen.create_key(s_uuid, p_uuid)
+        po_key = self._keygen.create_key(p_uuid, o_uuid)
+        os_key = self._keygen.create_key(o_uuid, s_uuid)
+
+        # Store in respective B+Trees
+        self._sp.insert(sp_key, o_uuid.to_hdf5())
+        self._po.insert(po_key, s_uuid.to_hdf5())
+        self._os.insert(os_key, p_uuid.to_hdf5())
+
+    def query(self, s: UUID, p: UUID) -> list[UUID]:
+        """Query using composite key derivation"""
+        sp_key = self._keygen.create_key(UUID128(s), UUID128(p))
+        results = self._sp.get(sp_key)
+        return [UUID(int=(r["high"] << 64) | r["low"]) for r in results]

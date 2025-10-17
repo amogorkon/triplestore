@@ -2,10 +2,12 @@
 This triplestore strives to provide simple yet powerful arbitrary Subject-Predicate-Object relationship data storage and retrieval purely written in python.
 
 # The Story
-First inspired by a master's thesis but completely reworked and refined. Then I got re-inspired by https://tentris.dice-research.org/iswc2020/ but realized that requiring data to be kept in memory is not viable for most people, so I turned it around and asked myself how to realize a triplestore based on hdf5 and sparse matrices.. 
+First inspired by a master's thesis but completely reworked and refined. Then I got re-inspired by https://tentris.dice-research.org/iswc2020/ but realized that requiring data to be kept in memory is not viable for most people, so I turned it around and asked myself how to realize a triplestore based on hdf5 and sparse matrices..
 
 
-This version is not ready for production.
-Please feel free to contribute :)
+# Concept
+This triplestore leverages my custom made hdf5-backed hash directory named *CIDStore* specifically built for this triplestore as a flat datastructure optimized solely for extremely efficient storage and retrieval of key-values with keys and values only being CIDs. The idea is while it is important to have fast and efficient storage of arbitrary data objects, it is even more important to have fast and efficient storage of the relationships between these objects as the number of relationships grows exponentially with the number of objects due to the combinatorial explosion of possible relationships. So the idea is that all subjects, predicates and objects are exclusively represented as their CID (SHA-hash). While logically we have three data stores - SPO, POS and OSP - it's all the same data, but with different discoverability. S only maps directly to P, P only maps directly to O, and O only maps directly to S. Once we have two of the three, the two keys are composed into a single key depending on their positions in the triple and the third can be retrieved by a simple lookup. With this approach we can store all the data in a single flat datastructure without any duplication or sacrificing any efficiency with regards to the relationship data storage and retrieval. The only downside is that we need to look up the actual data object in a second step using the CID. But this is a small price to pay for the efficiency of the triplestore.
+
+Extending this idea, it is also possible to group or classify things by considering the classification as something with its own CID that can be composed. This allows us to calculate (S × C) -> all predicates in this class for this subject or (O × C) -> all subjects in this class for this object or (P × C) -> all objects in this class for this predicate. This does not only allow us to store groups, tags, classifications etc the same way as any other relationship, but also allows caching complex queries inside the store as classification like any other. So, once a valueset was filtered for some criterion - which can be very expensive - the filter and its results can be stored as classification.
 
 - Anselm Kiefner
